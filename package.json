@@ -1,0 +1,23 @@
+{
+  "name": "clubastrolittoral",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Carte du ciel du Club Astro Littoral : préparer ses soirées et suivre le ciel en direct",
+  "type": "module",
+  "scripts": {
+    "data": "node scripts/build-data.mjs",
+    "dev": "vite",
+    "build": "node scripts/build-data.mjs && tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "astronomy-engine": "^2.1.19"
+  },
+  "devDependencies": {
+    "d3-celestial": "^0.7.35",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.8",
+    "vitest": "^5.1.0"
+  }
+}

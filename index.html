@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+    <meta name="theme-color" content="#050914" />
+    <meta name="description" content="Carte du ciel du Club Astro Littoral : préparer ses soirées et suivre le ciel en direct." />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Ciel Littoral" />
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="icons/icon-180.png" />
+    <title>Carte du ciel · Club Astro Littoral</title>
+  </head>
+  <body>
+    <canvas id="ciel" aria-label="Carte du ciel"></canvas>
+    <div id="chargement">Chargement du ciel…</div>
+
+    <header class="barre-haut">
+      <div class="recherche">
+        <input id="recherche" type="search" placeholder="Chercher : Véga, Orion, Jupiter…" autocomplete="off" />
+        <ul id="resultats"></ul>
+      </div>
+      <button id="bouton-nuit" class="icone" title="Mode nuit rouge" aria-pressed="false">
+        <svg viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg>
+      </button>
+      <button class="icone" data-ouvre="panneau-options" title="Affichage">
+        <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
+      </button>
+    </header>
+
+    <footer class="barre-bas">
+      <div class="ligne-info">
+        <button class="lien" data-ouvre="panneau-lieu" title="Lieu d'observation"><span>📍</span> <span id="lieu-nom"></span></button>
+        <span id="champ"></span>
+      </div>
+      <div class="temps">
+        <button id="t-moins-h" title="−1 heure">−1 h</button>
+        <button id="t-moins-10" title="−10 minutes">−10′</button>
+        <button id="heure" class="heure" title="Choisir la date et l'heure"></button>
+        <input id="date-input" type="datetime-local" aria-label="Date et heure" />
+        <button id="t-plus-10" title="+10 minutes">+10′</button>
+        <button id="t-plus-h" title="+1 heure">+1 h</button>
+        <button id="t-plus-j" title="+1 jour">+1 j</button>
+      </div>
+      <div class="actions">
+        <button id="direct" title="Revenir à maintenant">● Maintenant</button>
+        <button class="principal" data-ouvre="panneau-soir">Ce soir</button>
+      </div>
+    </footer>
+
+    <section id="panneau-info" class="fiche" hidden>
+      <div class="fiche-tete">
+        <div>
+          <h2 id="info-titre"></h2>
+          <p id="info-sous-titre"></p>
+        </div>
+        <button id="info-fermer" class="icone" title="Fermer">✕</button>
+      </div>
+      <table id="info-table" class="table"></table>
+      <button id="info-centrer">Centrer la vue</button>
+    </section>
+
+    <section id="panneau-options" class="panneau" hidden>
+      <div class="panneau-tete"><h2>Affichage</h2><button class="icone" data-ferme>✕</button></div>
+      <label><input type="checkbox" name="constellations" /> Lignes des constellations</label>
+      <label><input type="checkbox" name="nomsConstellations" /> Noms des constellations</label>
+      <label><input type="checkbox" name="nomsEtoiles" /> Noms des étoiles</label>
+      <label><input type="checkbox" name="sol" /> Sol et horizon</label>
+      <label><input type="checkbox" name="grilleAzAlt" /> Grille azimut / hauteur</label>
+      <label><input type="checkbox" name="grilleEq" /> Grille équatoriale</label>
+      <p class="note">Glissez pour vous déplacer, pincez ou utilisez la molette pour zoomer, touchez un astre pour sa fiche.</p>
+    </section>
+
+    <section id="panneau-lieu" class="panneau" hidden>
+      <div class="panneau-tete"><h2>Lieu d'observation</h2><button class="icone" data-ferme>✕</button></div>
+      <button id="lieu-gps" class="principal">📍 Utiliser ma position</button>
+      <form id="lieu-form">
+        <label>Nom <input id="lieu-nom-input" type="text" placeholder="ex. Terrain du club" /></label>
+        <div class="deux">
+          <label>Latitude (°N) <input id="lieu-lat" type="number" step="any" min="-90" max="90" required /></label>
+          <label>Longitude (°E) <input id="lieu-lon" type="number" step="any" min="-180" max="180" required /></label>
+        </div>
+        <label>Altitude (m) <input id="lieu-alt" type="number" step="1" /></label>
+        <button type="submit">Enregistrer</button>
+      </form>
+      <p id="lieu-msg" class="note"></p>
+    </section>
+
+    <section id="panneau-soir" class="panneau large" hidden>
+      <div class="panneau-tete"><h2>Ce soir</h2><button class="icone" data-ferme>✕</button></div>
+      <div id="soir-contenu"></div>
+    </section>
+
+    <div class="filtre-rouge" aria-hidden="true"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
