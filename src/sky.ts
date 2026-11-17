@@ -21,7 +21,7 @@ export interface Pointable {
   x: number;
   y: number;
   r: number;
-  type: 'etoile' | 'corps';
+  type: 'etoile' | 'corps' | 'dso';
   index: number; // indice étoile ou indice corps
 }
 
@@ -115,6 +115,10 @@ export interface Scene {
   options: Options;
   selection: Pointable | null;
   selectionV: Vec3 | null;
+  /** Calque dessiné sous les étoiles (ciel profond). */
+  calqueFond?: (ctx: CanvasRenderingContext2D, p: Projecteur, hauteur: (v: Vec3) => number, pts: Pointable[]) => void;
+  /** Calque dessiné par-dessus tout (cadre du champ). */
+  calqueDessus?: (ctx: CanvasRenderingContext2D, p: Projecteur) => void;
 }
 
 export function dessiner(ctx: CanvasRenderingContext2D, p: Projecteur, sc: Scene, P = PALETTE): Pointable[] {
@@ -156,6 +160,8 @@ export function dessiner(ctx: CanvasRenderingContext2D, p: Projecteur, sc: Scene
     ctx.stroke();
   }
 
+  sc.calqueFond?.(ctx, p, hauteur, pointables);
+
   // Étoiles (triées par magnitude croissante)
   const E = sc.donnees.etoiles;
   const lim = magLimite(fov);
@@ -188,6 +194,7 @@ export function dessiner(ctx: CanvasRenderingContext2D, p: Projecteur, sc: Scene
     ctx.fillStyle = P.texteDoux;
     ctx.textBaseline = 'middle';
     for (const pt of pointables) {
+      if (pt.type !== 'etoile') continue;
       if (E.mag[pt.index] > magNoms) break;
       const n = sc.donnees.noms[E.hip[pt.index]];
       if (n?.[0]) ctx.fillText(n[0], pt.x + pt.r + 4, pt.y);
@@ -230,6 +237,8 @@ export function dessiner(ctx: CanvasRenderingContext2D, p: Projecteur, sc: Scene
 
   // Sol et horizon
   if (sc.options.sol) dessinerSol(ctx, p, sc.eqjHor, P);
+
+  sc.calqueDessus?.(ctx, p);
 
   // Sélection
   if (sc.selectionV) {

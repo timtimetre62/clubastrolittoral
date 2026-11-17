@@ -5,9 +5,9 @@
   "description": "Carte du ciel du Club Astro Littoral : préparer ses soirées et suivre le ciel en direct",
   "type": "module",
   "scripts": {
-    "data": "node scripts/build-data.mjs",
+    "data": "node scripts/build-data.mjs && node scripts/build-dso.mjs",
     "dev": "vite",
-    "build": "node scripts/build-data.mjs && tsc --noEmit && vite build",
+    "build": "npm run data && tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run"
   },

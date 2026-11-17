@@ -112,3 +112,32 @@ h3 { margin: 14px 0 6px; font-size: 14px; color: var(--accent); }
   .heure { min-width: 0; flex: 1 1 100%; order: -1; }
   .fiche { bottom: calc(env(safe-area-inset-bottom) + 170px); }
 }
+
+select {
+  font: inherit; font-size: 15px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--bord);
+  background: rgba(0, 0, 0, 0.3); color: var(--texte); width: 100%;
+}
+#panneau-materiel > div > label, #panneau-objets label { flex-direction: column; align-items: stretch; gap: 4px; color: var(--doux); }
+#panneau-materiel label.case, #panneau-objets .cats label { flex-direction: row; align-items: center; color: var(--texte); }
+#m-zoom { width: 100%; margin-top: 8px; }
+input[type=range] { width: 100%; accent-color: #ff6b6b; }
+.liste-mat, .liste-objets { list-style: none; margin: 0; padding: 0; }
+.liste-mat li, .liste-objets li { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px solid var(--bord); }
+.liste-mat li span, .liste-objets li span { display: flex; flex-direction: column; }
+.liste-mat small, .liste-objets small { color: var(--doux); font-size: 12px; }
+.liste-objets li { cursor: pointer; }
+.liste-objets li:hover { background: rgba(80, 110, 180, 0.2); }
+.liste-objets .alt { white-space: nowrap; font-variant-numeric: tabular-nums; }
+button.petit { width: 32px; min-height: 32px; height: 32px; }
+details { margin: 6px 0; }
+summary { cursor: pointer; color: var(--accent); padding: 4px 0; }
+form.mini { display: grid; gap: 6px; padding: 6px 0; }
+form.mini input, form.mini select {
+  font: inherit; font-size: 15px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--bord); background: rgba(0, 0, 0, 0.3); color: var(--texte);
+}
+.segments { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 4px; }
+.segments button { flex: 1; padding: 6px 8px; }
+.segments button.actif { background: #2f4a8a; border-color: #6a8ad8; }
+.cats { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 0 10px; margin-bottom: 8px; }
+.cats label { padding: 3px 0 !important; font-size: 13px; }
+.cats small { color: var(--doux); }

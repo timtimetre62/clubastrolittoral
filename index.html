@@ -25,6 +25,12 @@
       <button id="bouton-nuit" class="icone" title="Mode nuit rouge" aria-pressed="false">
         <svg viewBox="0 0 24 24"><path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/></svg>
       </button>
+      <button class="icone" data-ouvre="panneau-objets" title="Catalogues et objets">
+        <svg viewBox="0 0 24 24"><ellipse cx="12" cy="12" rx="9" ry="4" transform="rotate(-30 12 12)"/><circle cx="12" cy="12" r="1.5"/></svg>
+      </button>
+      <button class="icone" data-ouvre="panneau-materiel" title="Mon matériel">
+        <svg viewBox="0 0 24 24"><path d="M3 14l14-7 2 4-14 7zM10 15l-3 6M12 14l3 7M17 7l2-1 2 4-2 1"/></svg>
+      </button>
       <button class="icone" data-ouvre="panneau-options" title="Affichage">
         <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg>
       </button>
@@ -86,6 +92,22 @@
         <button type="submit">Enregistrer</button>
       </form>
       <p id="lieu-msg" class="note"></p>
+    </section>
+
+    <section id="panneau-materiel" class="panneau" hidden>
+      <div class="panneau-tete"><h2>Mon matériel</h2><button class="icone" data-ferme>✕</button></div>
+      <div id="materiel-contenu"></div>
+    </section>
+
+    <section id="panneau-objets" class="panneau large" hidden>
+      <div class="panneau-tete"><h2>Catalogues et objets</h2><button class="icone" data-ferme>✕</button></div>
+      <div id="objets-filtres"></div>
+      <div class="deux">
+        <label>Hauteur min. <select id="objets-hmin"><option value="0">0°</option><option value="10">10°</option><option value="20" selected>20°</option><option value="30">30°</option><option value="45">45°</option></select></label>
+        <label>Trier par <select id="objets-tri"><option value="alt">Hauteur</option><option value="mag">Magnitude</option><option value="taille">Taille</option></select></label>
+      </div>
+      <p id="objets-compte" class="note"></p>
+      <ul id="objets-liste" class="liste-objets"></ul>
     </section>
 
     <section id="panneau-soir" class="panneau large" hidden>

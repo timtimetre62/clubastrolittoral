@@ -5,6 +5,11 @@ import {
 } from './astro';
 import { chargerDonnees, nomEtoile, type DonneesCiel } from './data';
 import { Projecteur, dessiner, type Vue, type Options, type Pointable } from './sky';
+import {
+  chargerDso, dessinerDso, dessinerCadre, accepte, titreDso, designation, CATALOGUES, NOMS_FAMILLES, FILTRE_DEFAUT,
+  type Dso, type FiltreDso, type Mode,
+} from './dso';
+import { MATERIEL_DEFAUT, CORRECTEURS, calculerChamp, fmtAngle, nouvelId, type Materiel, type Champ } from './materiel';
 
 // ---------------------------------------------------------------- État et préférences
 
@@ -29,8 +34,14 @@ const etat = {
   nuitRouge: lire<{ on: boolean }>('nuitRouge', { on: false }).on,
   direct: true,
   date: new Date(),
-  selection: null as null | { type: 'etoile' | 'corps'; index: number; v: Vec3 },
+  selection: null as null | { type: 'etoile' | 'corps' | 'dso'; index: number; v: Vec3 },
+  materiel: lire<Materiel>('materiel', MATERIEL_DEFAUT),
+  filtre: lire<FiltreDso>('filtreDso', FILTRE_DEFAUT),
 };
+etat.filtre.catalogues = { ...FILTRE_DEFAUT.catalogues, ...etat.filtre.catalogues };
+etat.materiel.config = { ...MATERIEL_DEFAUT.config, ...etat.materiel.config };
+let champ: Champ | null = calculerChamp(etat.materiel);
+let objets: Dso[] = [];
 
 let donnees: DonneesCiel;
 let genitifs = new Map<string, string>();
@@ -82,6 +93,10 @@ function boucle() {
     proj.maj(etat.vue, m, w, h);
     pointables = dessiner(ctx, proj, {
       donnees, corps, eqjHor: m, options: etat.options, selection: null, selectionV: etat.selection?.v ?? null,
+      calqueFond: (c, p, hauteur, pts) => dessinerDso(c, p, objets, etat.filtre, champ, hauteur, etat.options.sol, pts),
+      calqueDessus: (c, p) => {
+        if (champ && etat.materiel.config.afficherCadre) dessinerCadre(c, p, champ, etat.materiel.config.rotation);
+      },
     });
     majBarre();
   }
@@ -171,7 +186,7 @@ function choisir(x: number, y: number) {
   if (!meilleur) { fermerInfo(); return; }
   const v: Vec3 = meilleur.type === 'corps'
     ? corps[meilleur.index].v
-    : [donnees.etoiles.vec[meilleur.index * 3], donnees.etoiles.vec[meilleur.index * 3 + 1], donnees.etoiles.vec[meilleur.index * 3 + 2]];
+    : meilleur.type === 'dso' ? objets[meilleur.index].v : [donnees.etoiles.vec[meilleur.index * 3], donnees.etoiles.vec[meilleur.index * 3 + 1], donnees.etoiles.vec[meilleur.index * 3 + 2]];
   etat.selection = { type: meilleur.type, index: meilleur.index, v };
   afficherInfo();
   demanderRendu();
@@ -212,6 +227,22 @@ function afficherInfo() {
     ev = evenements(c.corps.id, etat.lieu, debut);
     extra += `<tr><th>Diamètre apparent</th><td>${c.diametre > 120 ? (c.diametre / 60).toFixed(1) + '′' : c.diametre.toFixed(1) + '″'}</td></tr>`;
     if (c.corps.nom !== 'Soleil') extra += `<tr><th>Phase</th><td>${(c.phase * 100).toFixed(0)} % éclairé</td></tr>`;
+  } else if (s.type === 'dso') {
+    const o = objets[s.index];
+    titre = o.nom || designation(o);
+    sousTitre = NOMS_FAMILLES[o.famille];
+    ra = o.ra; dec = o.dec; mag = o.mag;
+    ev = evenementsFixe(ra, dec, etat.lieu, debut);
+    extra += `<tr><th>Désignations</th><td>${o.ids.map((x) => x[1]).join(' · ')}</td></tr>`;
+    if (o.maj > 0) extra += `<tr><th>Dimensions</th><td>${fmtAngle(o.maj / 60)}${o.min > 0 ? ' × ' + fmtAngle(o.min / 60) : ''}</td></tr>`;
+    if (o.morpho) extra += `<tr><th>Morphologie</th><td>${o.morpho}</td></tr>`;
+    if (champ && o.maj > 0) {
+      const pct = (o.maj / 60 / Math.min(champ.largeur, champ.hauteur)) * 100;
+      extra += `<tr><th>Dans votre champ</th><td>${pct > 100 ? 'Plus grand que le champ (mosaïque ou focale plus courte)' : `occupe ${pct.toFixed(0)} % du champ`}</td></tr>`;
+    }
+    if (champ && o.mag < 99 && champ.type === 'visuel') {
+      extra += `<tr><th>Visuel</th><td>${o.mag <= champ.magLimite - 2 ? 'Accessible' : o.mag <= champ.magLimite - 0.5 ? 'Difficile' : 'Hors de portée'} avec cet instrument</td></tr>`;
+    }
   } else {
     const E = donnees.etoiles, i = s.index;
     titre = nomEtoile(donnees, E.hip[i], genitifs);
@@ -226,7 +257,7 @@ function afficherInfo() {
   $('#info-titre').textContent = titre;
   $('#info-sous-titre').textContent = `${sousTitre} · ${consNom}`;
   $('#info-table').innerHTML = `
-    <tr><th>Magnitude</th><td>${mag.toFixed(2)}</td></tr>
+    <tr><th>Magnitude</th><td>${mag >= 99 ? 'non mesurée' : mag.toFixed(s.type === 'dso' ? 1 : 2)}</td></tr>
     <tr><th>Hauteur</th><td>${fmtDeg(avecRefraction(alt))}${alt < 0 ? ' (sous l’horizon)' : ''}</td></tr>
     <tr><th>Azimut</th><td>${fmtDeg(az)} (${pointCardinal(az)})</td></tr>
     <tr><th>AD / Déc. (J2000)</th><td>${fmtHMS(ra)} / ${fmtDMS(dec)}</td></tr>
@@ -246,7 +277,7 @@ $('#info-centrer').addEventListener('click', () => { if (etat.selection) centrer
 
 // ---------------------------------------------------------------- Recherche
 
-interface Resultat { label: string; type: string; v: () => Vec3; select?: () => void; fov?: number }
+interface Resultat { label: string; type: string; cle?: string; v: () => Vec3; select?: () => void; fov?: number }
 let index: Resultat[] = [];
 
 function construireIndex() {
@@ -266,14 +297,24 @@ function construireIndex() {
     const v: Vec3 = [E.vec[i * 3], E.vec[i * 3 + 1], E.vec[i * 3 + 2]];
     index.push({ label: nomEtoile(donnees, E.hip[i], genitifs), type: 'étoile', v: () => v, select: () => { etat.selection = { type: 'etoile', index: i, v }; } });
   }
-  (window as unknown as { _norm: typeof norm })._norm = norm;
+  objets.forEach((o, i) => index.push({
+    label: titreDso(o), type: NOMS_FAMILLES[o.famille].toLowerCase(), cle: o.ids.map((x) => x[1].replace(/[\s-]+/g, '').toLowerCase()).join('|'),
+    v: () => o.v, select: () => { etat.selection = { type: 'dso', index: i, v: o.v }; },
+  }));
   const input = $<HTMLInputElement>('#recherche');
   const liste = $<HTMLUListElement>('#resultats');
   input.addEventListener('input', () => {
     const q = norm(input.value.trim());
     liste.innerHTML = '';
     if (q.length < 2) return;
-    const r = index.filter((x) => norm(x.label).includes(q)).slice(0, 12);
+    const q2 = q.replace(/[\s-]+/g, '');
+    const exacts: Resultat[] = [], autres: Resultat[] = [];
+    for (const x of index) {
+      const ids = x.cle?.split('|');
+      if (ids?.includes(q2)) exacts.push(x);
+      else if (autres.length < 15 && (norm(x.label).includes(q) || ids?.some((id) => id.startsWith(q2)))) autres.push(x);
+    }
+    const r = [...exacts, ...autres].slice(0, 15);
     for (const x of r) {
       const li = document.createElement('li');
       li.innerHTML = `<span>${x.label}</span><small>${x.type}</small>`;
@@ -298,6 +339,8 @@ function ouvrir(id: string) {
   p.hidden = !p.hidden;
   if (id === 'panneau-soir' && !p.hidden) afficherSoir();
   if (id === 'panneau-lieu' && !p.hidden) remplirLieu();
+  if (id === 'panneau-materiel' && !p.hidden) afficherMateriel();
+  if (id === 'panneau-objets' && !p.hidden) afficherObjets();
 }
 document.querySelectorAll<HTMLElement>('[data-ouvre]').forEach((b) => b.addEventListener('click', () => ouvrir(b.dataset.ouvre!)));
 document.querySelectorAll<HTMLElement>('[data-ferme]').forEach((b) => b.addEventListener('click', () => { b.closest<HTMLElement>('.panneau')!.hidden = true; }));
@@ -392,6 +435,176 @@ function afficherSoir() {
     </table>`;
 }
 
+
+// ---------------------------------------------------------------- Matériel
+
+function sauverMateriel() {
+  ecrire('materiel', etat.materiel);
+  champ = calculerChamp(etat.materiel);
+  demanderRendu();
+  if (!$('#panneau-info').hidden) afficherInfo();
+}
+
+const esc = (t: string) => t.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
+
+function afficherMateriel() {
+  const M = etat.materiel, C = M.config;
+  const opt = (v: string, t: string, sel: boolean) => `<option value="${v}"${sel ? ' selected' : ''}>${esc(t)}</option>`;
+  const inst = M.instruments.map((i) => opt(i.id, `${i.nom} (${i.diametre}/${i.focale})`, i.id === C.instrument)).join('');
+  const acc = `<optgroup label="Oculaires (visuel)">${M.oculaires.map((o) => opt(o.id, `${o.nom} · ${o.focale} mm · ${o.champApparent}°`, o.id === C.accessoire)).join('')}</optgroup>`
+    + `<optgroup label="Caméras (photo)">${M.cameras.map((c) => opt(c.id, `${c.nom} · ${c.largeur}×${c.hauteur} mm`, c.id === C.accessoire)).join('')}</optgroup>`;
+  const cor = CORRECTEURS.map(([k, t]) => opt(String(k), t, k === C.correcteur)).join('');
+  const ch = champ;
+  let res = '<p class="note">Choisissez un instrument et un oculaire ou une caméra.</p>';
+  if (ch) {
+    res = `<table class="table">
+      <tr><th>Champ</th><td>${ch.type === 'visuel' ? fmtAngle(ch.largeur) : `${fmtAngle(ch.largeur)} × ${fmtAngle(ch.hauteur)}`}</td></tr>
+      <tr><th>Focale résultante</th><td>${ch.focaleEff.toFixed(0)} mm · F/D ${ch.rapport.toFixed(1)}</td></tr>
+      ${ch.type === 'visuel' ? `
+        <tr><th>Grossissement</th><td>${ch.grossissement!.toFixed(0)}× <small>(max. utile ${ch.grossissementMax!.toFixed(0)}×)</small></td></tr>
+        <tr><th>Pupille de sortie</th><td>${ch.pupille!.toFixed(1)} mm${ch.pupille! > 7 ? ' <small>(trop grande, perte de lumière)</small>' : ''}</td></tr>
+        <tr><th>Magnitude limite</th><td>≈ ${ch.magLimite.toFixed(1)} (étoiles)</td></tr>`
+      : `<tr><th>Échantillonnage</th><td>${ch.echantillonnage!.toFixed(2)}″ / pixel</td></tr>`}
+    </table>`;
+  }
+  const liste = (titre: string, items: { id: string; nom: string; d: string }[], genre: string) => `
+    <h3>${titre}</h3>
+    <ul class="liste-mat">${items.map((x) => `<li><span>${esc(x.nom)}<small>${x.d}</small></span><button class="icone petit" data-suppr="${genre}:${x.id}" title="Supprimer">✕</button></li>`).join('')}</ul>`;
+  $('#materiel-contenu').innerHTML = `
+    <label>Instrument <select id="m-inst">${inst}</select></label>
+    <label>Oculaire ou caméra <select id="m-acc">${acc}</select></label>
+    <label>Barlow / réducteur <select id="m-cor">${cor}</select></label>
+    ${ch?.type === 'photo' ? `<label>Rotation du capteur : <span id="m-rot-val">${C.rotation}°</span><input id="m-rot" type="range" min="-90" max="90" step="1" value="${C.rotation}" /></label>` : ''}
+    <label class="case"><input id="m-cadre" type="checkbox" ${C.afficherCadre ? 'checked' : ''}/> Afficher le cadre sur la carte</label>
+    ${res}
+    <button id="m-zoom" ${ch ? '' : 'disabled'}>Zoomer sur le champ</button>
+    ${liste('Mes instruments', M.instruments.map((i) => ({ id: i.id, nom: i.nom, d: `${i.diametre} mm · F ${i.focale} mm · F/D ${(i.focale / i.diametre).toFixed(1)}` })), 'instruments')}
+    <details><summary>Ajouter un instrument</summary>
+      <form id="f-inst" class="mini">
+        <input name="nom" placeholder="Nom (ex. Newton 150/750)" required />
+        <select name="type"><option value="telescope">Télescope / lunette</option><option value="objectif">Objectif photo</option></select>
+        <input name="diametre" type="number" step="any" min="1" placeholder="Diamètre (mm)" />
+        <input name="fd" type="number" step="any" min="0.5" placeholder="ou F/D (objectif)" />
+        <input name="focale" type="number" step="any" min="1" placeholder="Focale (mm)" required />
+        <button>Ajouter</button>
+      </form></details>
+    ${liste('Mes oculaires', M.oculaires.map((o) => ({ id: o.id, nom: o.nom, d: `${o.focale} mm · ${o.champApparent}°` })), 'oculaires')}
+    <details><summary>Ajouter un oculaire</summary>
+      <form id="f-ocu" class="mini">
+        <input name="nom" placeholder="Nom (ex. Nagler 13 mm)" required />
+        <input name="focale" type="number" step="any" min="1" placeholder="Focale (mm)" required />
+        <input name="champApparent" type="number" step="any" min="20" max="120" placeholder="Champ apparent (°)" required />
+        <button>Ajouter</button>
+      </form></details>
+    ${liste('Mes caméras', M.cameras.map((c) => ({ id: c.id, nom: c.nom, d: `${c.largeur}×${c.hauteur} mm · pixels ${c.pixel} µm` })), 'cameras')}
+    <details><summary>Ajouter une caméra</summary>
+      <form id="f-cam" class="mini">
+        <input name="nom" placeholder="Nom (ex. Canon 600D)" required />
+        <input name="largeur" type="number" step="any" min="1" placeholder="Largeur capteur (mm)" required />
+        <input name="hauteur" type="number" step="any" min="1" placeholder="Hauteur capteur (mm)" required />
+        <input name="pixel" type="number" step="any" min="0.5" placeholder="Taille pixel (µm)" required />
+        <button>Ajouter</button>
+      </form></details>
+    <p class="note">Votre matériel est enregistré sur cet appareil.</p>`;
+
+  const ch2 = (sel: string, f: (el: HTMLInputElement) => void) => $<HTMLInputElement>(sel)?.addEventListener('change', (e) => f(e.target as HTMLInputElement));
+  ch2('#m-inst', (el) => { C.instrument = el.value; sauverMateriel(); afficherMateriel(); });
+  ch2('#m-acc', (el) => { C.accessoire = el.value; sauverMateriel(); afficherMateriel(); });
+  ch2('#m-cor', (el) => { C.correcteur = parseFloat(el.value); sauverMateriel(); afficherMateriel(); });
+  ch2('#m-cadre', (el) => { C.afficherCadre = el.checked; sauverMateriel(); });
+  $<HTMLInputElement>('#m-rot')?.addEventListener('input', (e) => {
+    C.rotation = parseInt((e.target as HTMLInputElement).value, 10);
+    $('#m-rot-val').textContent = `${C.rotation}°`;
+    sauverMateriel();
+  });
+  $('#m-zoom').addEventListener('click', () => {
+    if (!champ) return;
+    etat.vue.fov = Math.max(champ.largeur, champ.hauteur) * 1.6;
+    limiterVue();
+    demanderRendu();
+  });
+  document.querySelectorAll<HTMLElement>('[data-suppr]').forEach((b) => b.addEventListener('click', () => {
+    const [genre, id] = b.dataset.suppr!.split(':') as ['instruments' | 'oculaires' | 'cameras', string];
+    (M[genre] as { id: string }[]).splice((M[genre] as { id: string }[]).findIndex((x) => x.id === id), 1);
+    if (C.instrument === id) C.instrument = M.instruments[0]?.id ?? null;
+    if (C.accessoire === id) C.accessoire = M.oculaires[0]?.id ?? M.cameras[0]?.id ?? null;
+    sauverMateriel();
+    afficherMateriel();
+  }));
+  const form = (sel: string, f: (d: Record<string, string>) => void) => $<HTMLFormElement>(sel).addEventListener('submit', (e) => {
+    e.preventDefault();
+    f(Object.fromEntries(new FormData(e.target as HTMLFormElement)) as Record<string, string>);
+    sauverMateriel();
+    afficherMateriel();
+  });
+  form('#f-inst', (d) => {
+    const focale = +d.focale, diametre = +d.diametre || (d.fd ? focale / +d.fd : 0);
+    if (!diametre) return;
+    const id = nouvelId('i');
+    M.instruments.push({ id, nom: d.nom, type: d.type as 'telescope' | 'objectif', diametre: Math.round(diametre * 10) / 10, focale });
+    C.instrument = id;
+  });
+  form('#f-ocu', (d) => { const id = nouvelId('oc'); M.oculaires.push({ id, nom: d.nom, focale: +d.focale, champApparent: +d.champApparent }); C.accessoire = id; });
+  form('#f-cam', (d) => { const id = nouvelId('c'); M.cameras.push({ id, nom: d.nom, largeur: +d.largeur, hauteur: +d.hauteur, pixel: +d.pixel }); C.accessoire = id; });
+}
+
+// ---------------------------------------------------------------- Objets (catalogues et filtres)
+
+function sauverFiltre() {
+  ecrire('filtreDso', etat.filtre);
+  demanderRendu();
+}
+
+function afficherObjets() {
+  const F = etat.filtre;
+  const nb = (c: string) => objets.reduce((n, o) => n + (o.cats.has(c) ? 1 : 0), 0);
+  $('#objets-filtres').innerHTML = `
+    <div class="segments" role="radiogroup">
+      ${([['tout', 'Tout'], ['visuel', 'Visuel'], ['photo', 'Astrophoto grand champ']] as [Mode, string][]).map(([m, t]) =>
+        `<button data-mode="${m}" class="${F.mode === m ? 'actif' : ''}">${t}</button>`).join('')}
+    </div>
+    <p class="note">${F.mode === 'visuel' ? `Objets assez brillants pour votre instrument${champ ? ` (magnitude ≤ ${(champ.magLimite - 1.5).toFixed(1)})` : ''}, sans les nébuleuses trop faibles.`
+      : F.mode === 'photo' ? `Objets assez grands pour votre champ${champ?.type === 'photo' ? ` (${fmtAngle(champ.largeur)} de large)` : ''}, nébuleuses diffuses et sombres comprises.`
+      : 'Tous les objets des catalogues cochés.'}</p>
+    <div class="cats">${CATALOGUES.map(([c, t]) => `<label><input type="checkbox" data-cat="${c}" ${F.catalogues[c] ? 'checked' : ''}/> ${t} <small>${nb(c)}</small></label>`).join('')}</div>`;
+  document.querySelectorAll<HTMLElement>('[data-mode]').forEach((b) => b.addEventListener('click', () => {
+    F.mode = b.dataset.mode as Mode; sauverFiltre(); afficherObjets();
+  }));
+  document.querySelectorAll<HTMLInputElement>('[data-cat]').forEach((cb) => cb.addEventListener('change', () => {
+    F.catalogues[cb.dataset.cat!] = cb.checked; sauverFiltre(); listerObjets();
+  }));
+  listerObjets();
+}
+
+function listerObjets() {
+  const m = matriceEqjHor(etat.date, etat.lieu);
+  const hMin = parseFloat($<HTMLSelectElement>('#objets-hmin').value);
+  const res: { o: Dso; i: number; alt: number; az: number }[] = [];
+  objets.forEach((o, i) => {
+    if (!accepte(o, etat.filtre, champ)) return;
+    const { az, alt } = azAltDeVec(mul(m, o.v));
+    if (alt >= hMin) res.push({ o, i, alt, az });
+  });
+  const tri = $<HTMLSelectElement>('#objets-tri').value;
+  res.sort((a, b) => tri === 'mag' ? a.o.mag - b.o.mag : tri === 'taille' ? b.o.maj - a.o.maj : b.alt - a.alt);
+  $('#objets-compte').textContent = `${res.length} objet${res.length > 1 ? 's' : ''} au-dessus de ${hMin}° à ${fmtHeure(etat.date)}`;
+  const ul = $<HTMLUListElement>('#objets-liste');
+  ul.innerHTML = res.slice(0, 300).map(({ o, i, alt, az }) => `
+    <li data-i="${i}"><span>${esc(titreDso(o))}<small>${NOMS_FAMILLES[o.famille]} · ${o.mag < 99 ? 'mag ' + o.mag.toFixed(1) : 'mag —'}${o.maj ? ' · ' + fmtAngle(o.maj / 60) : ''}</small></span>
+    <small class="alt">${alt.toFixed(0)}° ${pointCardinal(az)}</small></li>`).join('');
+  ul.querySelectorAll<HTMLElement>('li').forEach((li) => li.addEventListener('click', () => {
+    const i = +li.dataset.i!;
+    etat.selection = { type: 'dso', index: i, v: objets[i].v };
+    const o = objets[i];
+    const taille = Math.max(o.maj / 60 * 4, champ ? Math.max(champ.largeur, champ.hauteur) * 1.6 : 2);
+    centrerSur(o.v, Math.min(60, taille));
+    afficherInfo();
+    if (window.innerWidth < 700) $('#panneau-objets').hidden = true;
+  }));
+}
+$('#objets-hmin').addEventListener('change', listerObjets);
+$('#objets-tri').addEventListener('change', listerObjets);
+
 // Temps
 const pas = (min: number) => () => changerDate(new Date(etat.date.getTime() + min * 60e3));
 $('#t-moins-h').addEventListener('click', pas(-60));
@@ -424,6 +637,7 @@ window.addEventListener('resize', demanderRendu);
     return;
   }
   genitifs = new Map(donnees.constellations.map((c) => [c.id, c.gen]));
+  try { objets = await chargerDso(); } catch { objets = []; }
   calculer();
   construireIndex();
   $('#chargement').hidden = true;
